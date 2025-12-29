@@ -25,7 +25,9 @@ export default function SchedulePage() {
     memberOps,
     skillOps,
     configOps,
+    roleOps,
     dbTeams,
+    dbRoles,
   } = useScheduleData({ year: CURRENT_YEAR })
 
   // Local state for projects (allows editing before auto-save)
@@ -477,6 +479,7 @@ export default function SchedulePage() {
                 teams={teams}
                 onOptimize={handleOptimize}
                 isOptimizing={isOptimizing}
+                dbRoles={dbRoles}
               />
             </div>
           )}
@@ -532,6 +535,8 @@ export default function SchedulePage() {
         onUpdateConfig={handleConfigUpdate}
         isOpen={isConfigOpen}
         onClose={() => setIsConfigOpen(false)}
+        roleOps={roleOps}
+        dbRoles={dbRoles}
       />
     </div>
   )

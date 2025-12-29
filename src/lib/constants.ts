@@ -21,6 +21,15 @@ export const SKILLS_LIST = [
   'SQL',
 ];
 
+export const DEFAULT_ROLES = [
+  'Portfolio Manager',
+  'Audit Lead',
+  'Staff Auditor',
+  'Senior Auditor',
+  'IT Specialist',
+  'Quality Reviewer',
+];
+
 export const DEFAULT_STAFF_TYPES: StaffType[] = [
   { id: 'pm-1', name: 'Sarah Chen', role: 'Portfolio Manager', maxHoursPerWeek: 15, color: 'bg-purple-100 text-purple-800', team: 'Finance', skills: { 'Project Management': 'Advanced', 'Communication': 'Advanced' } },
   { id: 'lead-1', name: 'Marcus Thorne', role: 'Audit Lead', maxHoursPerWeek: 40, color: 'bg-blue-100 text-blue-800', team: 'IT', skills: { 'Cybersecurity': 'Advanced', 'IT General Controls': 'Advanced' } },
@@ -85,6 +94,7 @@ export const DEFAULT_CONFIG: GlobalConfig = {
   staffTypes: DEFAULT_STAFF_TYPES,
   skills: SKILLS_LIST,
   phases: DEFAULT_PHASES,
+  roles: DEFAULT_ROLES,
 };
 
 export const getBasePhases = () => JSON.parse(JSON.stringify(DEFAULT_PHASES));

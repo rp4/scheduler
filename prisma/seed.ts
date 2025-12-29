@@ -23,7 +23,15 @@ const SKILLS = [
   'SQL',
 ];
 
-const ROLES = ['Portfolio Manager', 'Audit Lead', 'Senior Auditor', 'Unassigned'];
+const ROLES = [
+  'Portfolio Manager',
+  'Audit Lead',
+  'Staff Auditor',
+  'Senior Auditor',
+  'IT Specialist',
+  'Quality Reviewer',
+  'Unassigned',
+];
 
 const PHASES = [
   { name: 'Pre-Planning', defaultPercentBudget: 10, defaultMinWeeks: 1, defaultMaxWeeks: 2, sortOrder: 1 },

@@ -2,7 +2,18 @@
 
 import React from 'react';
 import { GlobalConfig, StaffType } from '@/types/schedule';
-import { X, Settings, Users, PieChart, AlertCircle, CheckCircle2, Trash2, Plus, User } from 'lucide-react';
+import { X, Settings, Users, PieChart, AlertCircle, CheckCircle2, Trash2, Plus, User, Tag } from 'lucide-react';
+
+interface RoleOps {
+  create: (name: string) => void;
+  update: (data: { id: string; name: string }) => void;
+  remove: (id: string) => void;
+}
+
+interface DbRole {
+  id: string;
+  name: string;
+}
 
 interface ConfigurationPanelProps {
   config: GlobalConfig;
@@ -10,6 +21,8 @@ interface ConfigurationPanelProps {
   onUpdateConfig: (phases: string) => void;
   isOpen: boolean;
   onClose: () => void;
+  roleOps?: RoleOps;
+  dbRoles?: DbRole[];
 }
 
 export const ConfigurationPanel: React.FC<ConfigurationPanelProps> = ({
@@ -17,11 +30,14 @@ export const ConfigurationPanel: React.FC<ConfigurationPanelProps> = ({
   teams,
   onUpdateConfig,
   isOpen,
-  onClose
+  onClose,
+  roleOps,
+  dbRoles,
 }) => {
   if (!isOpen) return null;
 
   const [localPhases, setLocalPhases] = React.useState(config.phases);
+  const [newRoleName, setNewRoleName] = React.useState('');
 
   const updatePhase = (phaseIndex: number, field: string, value: any) => {
     const newPhases = [...localPhases];
@@ -161,6 +177,79 @@ export const ConfigurationPanel: React.FC<ConfigurationPanelProps> = ({
                 </div>
               );
             })}
+            </div>
+          </section>
+
+          {/* Roles Section */}
+          <section>
+            <div className="flex justify-between items-end mb-4 border-b pb-2">
+              <h3 className="text-md font-bold text-slate-800 flex items-center gap-2">
+                <Tag className="w-4 h-4" />
+                Project Roles
+              </h3>
+              <span className="text-xs text-slate-500">{dbRoles?.length || 0} roles defined</span>
+            </div>
+
+            <div className="space-y-3">
+              {/* Add new role */}
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  placeholder="New role name (e.g., Staff Auditor)"
+                  className="flex-1 px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none"
+                  value={newRoleName}
+                  onChange={(e) => setNewRoleName(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && newRoleName.trim() && roleOps) {
+                      roleOps.create(newRoleName.trim());
+                      setNewRoleName('');
+                    }
+                  }}
+                />
+                <button
+                  onClick={() => {
+                    if (newRoleName.trim() && roleOps) {
+                      roleOps.create(newRoleName.trim());
+                      setNewRoleName('');
+                    }
+                  }}
+                  disabled={!newRoleName.trim()}
+                  className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5"
+                >
+                  <Plus className="w-4 h-4" />
+                  Add
+                </button>
+              </div>
+
+              {/* List of existing roles */}
+              <div className="border border-slate-200 rounded-lg divide-y divide-slate-100">
+                {dbRoles && dbRoles.length > 0 ? (
+                  dbRoles.map((role) => (
+                    <div key={role.id} className="flex items-center justify-between p-3 hover:bg-slate-50 transition-colors group">
+                      <div className="flex items-center gap-2">
+                        <Tag className="w-4 h-4 text-slate-400" />
+                        <span className="text-sm text-slate-700">{role.name}</span>
+                      </div>
+                      <button
+                        onClick={() => roleOps?.remove(role.id)}
+                        className="text-slate-300 hover:text-red-500 hover:bg-red-50 rounded p-1 transition-colors opacity-0 group-hover:opacity-100"
+                        title="Delete role"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ))
+                ) : (
+                  <div className="p-4 text-center text-slate-400 text-sm italic">
+                    No roles defined yet. Add a role above.
+                  </div>
+                )}
+              </div>
+
+              <p className="text-xs text-slate-500">
+                Roles define positions that can be assigned to projects (e.g., "Audit Lead", "Staff Auditor").
+                Team members can then be assigned to fill these roles on each project.
+              </p>
             </div>
           </section>
         </div>

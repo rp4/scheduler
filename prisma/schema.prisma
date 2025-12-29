@@ -44,10 +44,11 @@ model Skill {
 }
 
 model Role {
-  id        String   @id @default(cuid())
-  name      String   @unique
-  createdAt DateTime @default(now())
-  members   Member[]
+  id           String        @id @default(cuid())
+  name         String        @unique
+  createdAt    DateTime      @default(now())
+  members      Member[]
+  projectRoles ProjectRole[]
 }
 
 model Phase {
@@ -60,19 +61,20 @@ model Phase {
 }
 
 model Member {
-  id          String       @id @default(cuid())
-  name        String
-  teamId      String?
-  team        Team?        @relation(fields: [teamId], references: [id])
-  roleId      String?
-  role        Role?        @relation(fields: [roleId], references: [id])
-  maxHours    Int          @default(40)
-  skills      String       @default("{}") // JSON: Record<skillName, SkillLevel>
-  color       String       @default("bg-slate-100 text-slate-800")
-  isTemplate  Boolean      @default(false)
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
-  assignments Assignment[]
+  id           String        @id @default(cuid())
+  name         String
+  teamId       String?
+  team         Team?         @relation(fields: [teamId], references: [id])
+  roleId       String?
+  role         Role?         @relation(fields: [roleId], references: [id])
+  maxHours     Int           @default(40)
+  skills       String        @default("{}") // JSON: Record<skillName, SkillLevel>
+  color        String        @default("bg-slate-100 text-slate-800")
+  isTemplate   Boolean       @default(false)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  assignments  Assignment[]
+  projectRoles ProjectRole[]
 }
 
 model Project {
@@ -91,6 +93,7 @@ model Project {
   createdAt       DateTime       @default(now())
   updatedAt       DateTime       @updatedAt
   assignments     Assignment[]
+  projectRoles    ProjectRole[]
 }
 
 model Assignment {
@@ -106,4 +109,16 @@ model Assignment {
   updatedAt DateTime @updatedAt
 
   @@unique([projectId, memberId, week])
+}
+
+model ProjectRole {
+  id        String   @id @default(cuid())
+  projectId String
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  roleId    String
+  role      Role     @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  memberId  String?
+  member    Member?  @relation(fields: [memberId], references: [id], onDelete: SetNull)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }

@@ -1,9 +1,15 @@
 'use client'
 
-import React, { useState } from 'react';
-import { ProjectInput, GlobalConfig } from '@/types/schedule';
-import { Plus, Trash2, Calendar, Lock, Unlock, X, Sparkles, ChevronUp, ChevronDown } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { ProjectInput, GlobalConfig, ProjectRoleAssignment } from '@/types/schedule';
+import { Plus, Trash2, Calendar, Lock, Unlock, X, Sparkles, ChevronUp, ChevronDown, Tag, UserPlus } from 'lucide-react';
 import { format, addWeeks, startOfYear, startOfWeek } from 'date-fns';
+import { useProjectRoles } from '@/hooks/useProjectRoles';
+
+interface DbRole {
+  id: string;
+  name: string;
+}
 
 interface ProjectListProps {
   projects: ProjectInput[];
@@ -12,6 +18,7 @@ interface ProjectListProps {
   teams: string[];
   onOptimize: () => void;
   isOptimizing: boolean;
+  dbRoles?: DbRole[];
 }
 
 export const ProjectList: React.FC<ProjectListProps> = ({
@@ -20,7 +27,8 @@ export const ProjectList: React.FC<ProjectListProps> = ({
   currentConfig,
   teams,
   onOptimize,
-  isOptimizing
+  isOptimizing,
+  dbRoles,
 }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingProjectId, setEditingProjectId] = useState<string | null>(null);
@@ -30,6 +38,13 @@ export const ProjectList: React.FC<ProjectListProps> = ({
   const [newProjectOffset, setNewProjectOffset] = useState<number>(0);
   const [newProjectTeam, setNewProjectTeam] = useState<string>(teams[0] || 'General');
   const [newProjectSkills, setNewProjectSkills] = useState<string[]>([]);
+  const [selectedRoleToAdd, setSelectedRoleToAdd] = useState<string>('');
+
+  // Fetch project roles for the editing project
+  const { data: projectRoles, create: createProjectRole, update: updateProjectRole, remove: removeProjectRole } = useProjectRoles(editingProjectId || undefined);
+
+  // Get team members that can be assigned (non-template staff)
+  const teamMembers = currentConfig.staffTypes.filter(s => !s.id.startsWith('tmpl-') && s.id !== 'placeholder');
 
   const getStartDateFromOffset = (offset: number) => {
     const year = currentConfig.year;
@@ -332,6 +347,87 @@ export const ProjectList: React.FC<ProjectListProps> = ({
                          <span className="font-semibold text-indigo-600">{newProjectSkills.length} selected</span>
                       </p>
                     </div>
+
+                    {/* Project Roles Section - Only show when editing */}
+                    {editingProjectId && dbRoles && dbRoles.length > 0 && (
+                      <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-1.5 flex items-center gap-2">
+                          <Tag className="w-4 h-4" />
+                          Project Roles
+                        </label>
+
+                        {/* Add new role to project */}
+                        <div className="flex gap-2 mb-2">
+                          <select
+                            className="flex-1 px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none"
+                            value={selectedRoleToAdd}
+                            onChange={(e) => setSelectedRoleToAdd(e.target.value)}
+                          >
+                            <option value="">Select a role to add...</option>
+                            {dbRoles.map(role => (
+                              <option key={role.id} value={role.id}>{role.name}</option>
+                            ))}
+                          </select>
+                          <button
+                            onClick={() => {
+                              if (selectedRoleToAdd && editingProjectId) {
+                                createProjectRole({
+                                  projectId: editingProjectId,
+                                  roleId: selectedRoleToAdd,
+                                });
+                                setSelectedRoleToAdd('');
+                              }
+                            }}
+                            disabled={!selectedRoleToAdd}
+                            className="px-3 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
+                          >
+                            <Plus className="w-4 h-4" />
+                          </button>
+                        </div>
+
+                        {/* List of assigned roles */}
+                        <div className="w-full border border-slate-300 rounded-lg overflow-hidden bg-slate-50/50">
+                          {projectRoles && projectRoles.length > 0 ? (
+                            <div className="divide-y divide-slate-200">
+                              {projectRoles.map((pr) => (
+                                <div key={pr.id} className="p-2 flex items-center gap-2 hover:bg-white transition-colors">
+                                  <Tag className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                                  <span className="text-xs font-medium text-slate-700 w-24 truncate">{pr.role.name}</span>
+                                  <select
+                                    className="flex-1 px-2 py-1 border border-slate-200 rounded text-xs focus:ring-1 focus:ring-indigo-500 outline-none"
+                                    value={pr.memberId || ''}
+                                    onChange={(e) => {
+                                      updateProjectRole({
+                                        id: pr.id,
+                                        data: { memberId: e.target.value || null },
+                                      });
+                                    }}
+                                  >
+                                    <option value="">Unassigned</option>
+                                    {teamMembers.map(member => (
+                                      <option key={member.id} value={member.id}>{member.name}</option>
+                                    ))}
+                                  </select>
+                                  <button
+                                    onClick={() => removeProjectRole(pr.id)}
+                                    className="text-slate-300 hover:text-red-500 p-1 rounded hover:bg-red-50 transition-colors"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <div className="p-3 text-center text-slate-400 text-xs italic">
+                              No roles assigned yet. Add a role above.
+                            </div>
+                          )}
+                        </div>
+                        <p className="text-[10px] text-slate-400 mt-1.5">
+                          Add role slots and assign team members to this project.
+                        </p>
+                      </div>
+                    )}
                 </div>
 
                 <div className="px-6 py-4 bg-slate-50 border-t border-slate-100 flex justify-end gap-3 shrink-0">

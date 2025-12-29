@@ -35,6 +35,15 @@ export interface GlobalConfig {
   phases: PhaseConfig[];
   staffTypes: StaffType[];
   skills: string[];
+  roles: string[];
+}
+
+export interface ProjectRoleAssignment {
+  id: string;
+  roleId: string;
+  roleName: string;
+  memberId: string | null;
+  memberName: string | null;
 }
 
 export interface ProjectOverrides {
@@ -52,6 +61,7 @@ export interface ProjectInput {
   overrides?: ProjectOverrides;
   team?: string;
   requiredSkills?: string[];
+  projectRoles?: ProjectRoleAssignment[];
 }
 
 export interface ScheduleCell {

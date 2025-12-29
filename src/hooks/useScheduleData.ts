@@ -6,6 +6,7 @@ import { useMembers } from './useMembers'
 import { useConfiguration } from './useConfiguration'
 import { useSkills } from './useSkills'
 import { useTeams } from './useTeams'
+import { useRoles } from './useRoles'
 import type { GlobalConfig, ProjectInput, StaffType, PhaseConfig, PhaseName } from '@/types/schedule'
 
 interface UseScheduleDataOptions {
@@ -29,8 +30,9 @@ export function useScheduleData(options: UseScheduleDataOptions = {}) {
   const { data: dbConfig, isLoading: configLoading, ...configOps } = useConfiguration(userId, year)
   const { data: dbSkills, isLoading: skillsLoading, ...skillOps } = useSkills()
   const { data: dbTeams, isLoading: teamsLoading } = useTeams()
+  const { data: dbRoles, isLoading: rolesLoading, ...roleOps } = useRoles()
 
-  const isLoading = projectsLoading || membersLoading || configLoading || skillsLoading || teamsLoading
+  const isLoading = projectsLoading || membersLoading || configLoading || skillsLoading || teamsLoading || rolesLoading
 
   // Transform database models to existing types for scheduleEngine
   const projects: ProjectInput[] = useMemo(() => {
@@ -80,12 +82,18 @@ export function useScheduleData(options: UseScheduleDataOptions = {}) {
     return dbTeams.map((t) => t.name)
   }, [dbTeams])
 
+  const roles: string[] = useMemo(() => {
+    if (!dbRoles) return []
+    return dbRoles.map((r) => r.name)
+  }, [dbRoles])
+
   const config: GlobalConfig = useMemo(() => ({
     year,
     phases,
     staffTypes,
     skills,
-  }), [year, phases, staffTypes, skills])
+    roles,
+  }), [year, phases, staffTypes, skills, roles])
 
   return {
     projects,
@@ -98,9 +106,11 @@ export function useScheduleData(options: UseScheduleDataOptions = {}) {
     memberOps,
     configOps,
     skillOps,
+    roleOps,
     // Raw DB data for reference
     dbProjects,
     dbMembers,
     dbTeams,
+    dbRoles,
   }
 }
