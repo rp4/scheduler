@@ -1,4 +1,4 @@
-// File: /home/p472/Scheduler/src/app/api/teams/route.ts
+// File: /home/p472/scheduler/src/app/api/teams/route.ts
 import * as entry from '../../../../../src/app/api/teams/route.js'
 import type { NextRequest } from 'next/server.js'
 

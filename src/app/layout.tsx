@@ -6,7 +6,7 @@ import { QueryProvider } from '@/components/providers/QueryProvider'
 const inter = Inter({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
-  title: 'AuditScheduler Pro',
+  title: 'Audit Scheduler',
   description: 'Audit project scheduling and resource management',
 }
 

@@ -3,8 +3,7 @@
 import React, { useMemo, useState, useRef, useEffect } from 'react';
 import { ScheduleData, PhaseName, ScheduleRow, ScheduleCell, ProjectInput, GlobalConfig } from '@/types/schedule';
 import { format, parseISO } from 'date-fns';
-import { Download, TrendingUp, ChevronRight, ChevronDown, Clock, Activity, Target, Plus, Trash2 } from 'lucide-react';
-import * as XLSX from 'xlsx';
+import { TrendingUp, ChevronRight, ChevronDown, Clock, Activity, Target, Plus, Trash2, Award, Search, Calendar, Filter } from 'lucide-react';
 
 export type ViewMode = 'project' | 'member' | 'skill';
 
@@ -12,6 +11,7 @@ interface ScheduleTableProps {
   data: ScheduleData;
   projects: ProjectInput[];
   config: GlobalConfig;
+  teams: string[];
   onCellUpdate: (projectId: string, staffTypeId: string, staffIndex: number, date: string, value: any, type: 'hours' | 'phase') => void;
   onAssignmentChange: (projectId: string, oldStaffTypeId: string, newStaffTypeId: string) => void;
   onAddAssignment?: (projectId: string) => void;
@@ -20,6 +20,12 @@ interface ScheduleTableProps {
   onProjectChange?: (staffTypeId: string, oldProjectId: string, newProjectId: string) => void;
   viewMode: ViewMode;
   onViewModeChange: (mode: ViewMode) => void;
+  fromDate: string;
+  toDate: string;
+  selectedTeam: string;
+  onFromDateChange: (date: string) => void;
+  onToDateChange: (date: string) => void;
+  onTeamChange: (team: string) => void;
 }
 
 const PHASE_COLORS: Record<string, string> = {
@@ -134,6 +140,7 @@ export const ScheduleTable: React.FC<ScheduleTableProps> = ({
   data,
   projects,
   config,
+  teams,
   onCellUpdate,
   onAssignmentChange,
   onAddAssignment,
@@ -141,11 +148,39 @@ export const ScheduleTable: React.FC<ScheduleTableProps> = ({
   onAddProjectToMember,
   onProjectChange,
   viewMode,
+  fromDate,
+  toDate,
+  selectedTeam,
+  onFromDateChange,
+  onToDateChange,
+  onTeamChange,
   onViewModeChange
 }) => {
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
+  const [expandedSkillCards, setExpandedSkillCards] = useState<Set<string>>(new Set());
+  const [skillProjectSearch, setSkillProjectSearch] = useState('');
   const [editingCell, setEditingCell] = useState<{ id: string, date: string, type: 'project' | 'staff' } | null>(null);
   const [dragState, setDragState] = useState<DragState | null>(null);
+
+  const toggleSkillCard = (id: string) => {
+    setExpandedSkillCards(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(id)) {
+        newSet.delete(id);
+      } else {
+        newSet.add(id);
+      }
+      return newSet;
+    });
+  };
+
+  const expandAllSkillCards = () => {
+    setExpandedSkillCards(new Set(projects.map(p => p.id)));
+  };
+
+  const collapseAllSkillCards = () => {
+    setExpandedSkillCards(new Set());
+  };
 
   const projectAssignments = useMemo(() => {
     const map: Record<string, Set<string>> = {};
@@ -222,29 +257,6 @@ export const ScheduleTable: React.FC<ScheduleTableProps> = ({
     setExpandedGroups(newSet);
   };
 
-  const handleExport = () => {
-    const wb = XLSX.utils.book_new();
-    const wsData = [];
-
-    const headers = ['Project Name', 'Role', 'Staff Name', 'Total Hours', ...data.headers.map(d => format(parseISO(d), 'yyyy-MM-dd'))];
-    wsData.push(headers);
-
-    data.rows.forEach(row => {
-        const rowData = [
-            row.projectName,
-            row.staffRole,
-            row.staffTypeName,
-            row.totalHours,
-            ...row.cells.map(c => c.hours)
-        ];
-        wsData.push(rowData);
-    });
-
-    const ws = XLSX.utils.aoa_to_sheet(wsData);
-    XLSX.utils.book_append_sheet(wb, ws, "Schedule");
-    XLSX.writeFile(wb, `AuditSchedule_${format(new Date(), 'yyyyMMdd')}.xlsx`);
-  };
-
   const stats = useMemo(() => {
     const weeksCount = data.headers.length || 52;
     let grandTotal = 0;
@@ -290,7 +302,7 @@ export const ScheduleTable: React.FC<ScheduleTableProps> = ({
     const utilization = totalCapacity > 0 ? (grandTotal / totalCapacity) * 100 : 0;
     const totalAvgWeekly = grandTotal / weeksCount;
 
-    let totalSkillScore = 0;
+    // Calculate skill coverage
     const assignmentMap: Record<string, Set<string>> = {};
     data.rows.forEach(row => {
         if (row.totalHours > 0) {
@@ -299,25 +311,32 @@ export const ScheduleTable: React.FC<ScheduleTableProps> = ({
         }
     });
 
+    let totalRequiredSkills = 0;
+    let totalCoveredSkills = 0;
+
     Object.keys(assignmentMap).forEach(projectId => {
         const project = projects.find(p => p.id === projectId);
         if (project && project.requiredSkills && project.requiredSkills.length > 0) {
-            let projectPoints = 0;
             const assignedStaffIds = assignmentMap[projectId];
             project.requiredSkills.forEach(skillName => {
+                totalRequiredSkills++;
+                // Check if any assigned staff has this skill
+                let isCovered = false;
                 assignedStaffIds.forEach(staffId => {
                     const staff = config.staffTypes.find(s => s.id === staffId);
                     const level = staff?.skills?.[skillName];
-                    if (level === 'Beginner') projectPoints += 1;
-                    else if (level === 'Intermediate') projectPoints += 2;
-                    else if (level === 'Advanced') projectPoints += 3;
+                    if (level && level !== 'None') {
+                        isCovered = true;
+                    }
                 });
+                if (isCovered) totalCoveredSkills++;
             });
-            totalSkillScore += (projectPoints / project.requiredSkills.length);
         }
     });
 
-    return { totalAvgWeekly, totalOvertime, utilization, totalSkillScore };
+    const avgSkillCoverage = totalRequiredSkills > 0 ? (totalCoveredSkills / totalRequiredSkills) * 100 : 0;
+
+    return { totalAvgWeekly, totalOvertime, utilization, avgSkillCoverage };
   }, [data, config.staffTypes, projects]);
 
   const groupedData = useMemo(() => {
@@ -374,77 +393,285 @@ export const ScheduleTable: React.FC<ScheduleTableProps> = ({
     return Object.values(groups);
   }, [data, viewMode]);
 
+  // Helper to get skill level color and width
+  const getSkillLevelStyle = (level: string | undefined) => {
+    switch (level) {
+      case 'Advanced':
+        return { bg: 'bg-emerald-500', width: 'w-full', text: 'ADV', color: 'text-emerald-700' };
+      case 'Intermediate':
+        return { bg: 'bg-amber-400', width: 'w-2/3', text: 'INT', color: 'text-amber-700' };
+      case 'Beginner':
+        return { bg: 'bg-sky-400', width: 'w-1/3', text: 'BEG', color: 'text-sky-700' };
+      default:
+        return { bg: 'bg-slate-200', width: 'w-0', text: '-', color: 'text-slate-400' };
+    }
+  };
+
+  // Calculate skill coverage stats
+  const skillStats = useMemo(() => {
+    const stats: Record<string, { required: number; covered: number; avgLevel: number }> = {};
+    config.skills.forEach(skill => {
+      let required = 0;
+      let covered = 0;
+      let totalLevel = 0;
+      let staffWithSkill = 0;
+
+      projects.forEach(project => {
+        if (project.requiredSkills?.includes(skill)) {
+          required++;
+          const assignedStaffIds = projectAssignments[project.id] || new Set();
+          let hasSkill = false;
+          assignedStaffIds.forEach(staffId => {
+            const staff = config.staffTypes.find(s => s.id === staffId);
+            const level = staff?.skills?.[skill];
+            if (level && level !== 'None') {
+              hasSkill = true;
+              if (level === 'Advanced') totalLevel += 3;
+              else if (level === 'Intermediate') totalLevel += 2;
+              else if (level === 'Beginner') totalLevel += 1;
+              staffWithSkill++;
+            }
+          });
+          if (hasSkill) covered++;
+        }
+      });
+
+      stats[skill] = {
+        required,
+        covered,
+        avgLevel: staffWithSkill > 0 ? totalLevel / staffWithSkill : 0
+      };
+    });
+    return stats;
+  }, [config.skills, projects, projectAssignments, config.staffTypes]);
+
   const renderContent = () => {
     if (viewMode === 'skill') {
+        // Calculate project skill data for cards
+        const projectSkillData = projects.map(project => {
+            const assignedStaffIds = projectAssignments[project.id] || new Set();
+            const assignedStaff = config.staffTypes.filter(s => assignedStaffIds.has(s.id));
+            const requiredSkills = project.requiredSkills || [];
+
+            // Calculate skill coverage
+            const skillScores = requiredSkills.map(skill => {
+                const staffWithSkill = assignedStaff.filter(s => s.skills?.[skill] && s.skills[skill] !== 'None');
+                const contributors: { name: string; initials: string; level: string }[] = [];
+
+                staffWithSkill.forEach(s => {
+                    const level = s.skills?.[skill] || 'None';
+                    if (level !== 'None') {
+                        contributors.push({
+                            name: s.name,
+                            initials: s.name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase() || '??',
+                            level
+                        });
+                    }
+                });
+
+                return { skill, contributors, isCovered: contributors.length > 0 };
+            });
+
+            const coveredCount = skillScores.filter(s => s.isCovered).length;
+            const coveragePercent = requiredSkills.length > 0 ? (coveredCount / requiredSkills.length) * 100 : 0;
+
+            return {
+                project,
+                assignedStaff,
+                skillScores,
+                coveredCount,
+                coveragePercent
+            };
+        });
+
         return (
-            <table className="border-collapse min-w-max w-full text-sm">
-                <thead className="bg-slate-100 sticky top-0 z-20 shadow-sm">
-                    <tr>
-                        <th className="sticky left-0 z-30 bg-slate-100 p-3 text-left font-semibold text-slate-600 border-r border-b border-slate-300 min-w-[200px] w-[200px]">
-                            Audit Name
-                        </th>
-                        {config.skills.map(skill => (
-                            <th key={skill} className="p-3 text-center font-semibold text-slate-600 border-r border-b border-slate-300 min-w-[100px]">
-                                <span className="text-xs">{skill}</span>
-                            </th>
-                        ))}
-                    </tr>
-                </thead>
-                <tbody>
-                    {projects.map(project => (
-                        <tr key={project.id} className="hover:bg-slate-50 border-b border-slate-100 bg-white">
-                            <td className="sticky left-0 z-10 bg-white p-3 border-r border-slate-200 font-medium text-slate-700">
-                                {project.name}
-                            </td>
-                            {config.skills.map(skill => {
-                                const required = project.requiredSkills?.includes(skill);
+            <div className="flex flex-col h-full p-4 overflow-auto">
+                {/* Header Controls */}
+                <div className="flex items-center justify-between mb-4 pb-3 border-b border-slate-200 gap-4">
+                    {/* Search */}
+                    <div className="relative flex-1 max-w-xs">
+                        <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                        <input
+                            type="text"
+                            placeholder="Search projects..."
+                            value={skillProjectSearch}
+                            onChange={(e) => setSkillProjectSearch(e.target.value)}
+                            className="w-full pl-8 pr-3 py-1.5 text-xs bg-white border border-slate-300 text-slate-700 placeholder-slate-400 rounded-lg focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none"
+                        />
+                    </div>
 
-                                if (!required) {
-                                    return (
-                                        <td key={skill} className="p-2 text-center border-r border-slate-100">
-                                            <span className="text-slate-200 text-[10px]">-</span>
-                                        </td>
-                                    );
-                                }
+                    <div className="flex items-center gap-4">
+                        {/* Legend */}
+                        <div className="flex items-center gap-3 text-[10px]">
+                            <div className="flex items-center gap-1.5">
+                                <div className="w-2.5 h-2.5 bg-emerald-500 rounded"></div>
+                                <span className="text-slate-600">Advanced</span>
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                                <div className="w-2.5 h-2.5 bg-amber-500 rounded"></div>
+                                <span className="text-slate-600">Intermediate</span>
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                                <div className="w-2.5 h-2.5 bg-sky-500 rounded"></div>
+                                <span className="text-slate-600">Beginner</span>
+                            </div>
+                        </div>
 
-                                const assignedStaffIds = projectAssignments[project.id] || new Set();
-                                let score = 0;
+                        {/* Expand/Collapse */}
+                        <div className="flex items-center gap-1">
+                            <button
+                                onClick={expandAllSkillCards}
+                                className="text-[10px] text-indigo-600 hover:text-indigo-700 font-medium hover:underline"
+                            >
+                                Expand All
+                            </button>
+                            <span className="text-slate-300">|</span>
+                            <button
+                                onClick={collapseAllSkillCards}
+                                className="text-[10px] text-indigo-600 hover:text-indigo-700 font-medium hover:underline"
+                            >
+                                Collapse All
+                            </button>
+                        </div>
+                    </div>
+                </div>
 
-                                assignedStaffIds.forEach(staffId => {
-                                    const staff = config.staffTypes.find(s => s.id === staffId);
-                                    const level = staff?.skills?.[skill];
-                                    if (level) {
-                                        if (level === 'Beginner') score += 1;
-                                        else if (level === 'Intermediate') score += 2;
-                                        else if (level === 'Advanced') score += 3;
-                                    }
-                                });
+                {/* Project Cards Grid */}
+                {projects.length > 0 ? (
+                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+                        {projectSkillData
+                            .filter(({ project }) =>
+                                project.name.toLowerCase().includes(skillProjectSearch.toLowerCase()) ||
+                                (project.team?.toLowerCase().includes(skillProjectSearch.toLowerCase()) ?? false)
+                            )
+                            .map(({ project, assignedStaff, skillScores, coveragePercent }) => {
+                            const isExpanded = expandedSkillCards.has(project.id);
+                            const gapCount = skillScores.filter(s => !s.isCovered).length;
 
-                                return (
-                                    <td key={skill} className="p-2 text-center border-r border-slate-100">
-                                        {score > 0 ? (
-                                            <div className="inline-block px-2 py-0.5 rounded bg-indigo-50 text-indigo-700 font-bold text-xs border border-indigo-100">
-                                                {score} pts
+                            return (
+                                <div
+                                    key={project.id}
+                                    className="bg-white border border-slate-200 rounded-xl shadow-sm hover:shadow-md transition-all overflow-hidden"
+                                >
+                                    {/* Card Header - Always Visible, Clickable */}
+                                    <button
+                                        onClick={() => toggleSkillCard(project.id)}
+                                        className="w-full p-3 text-left hover:bg-slate-50 transition-colors"
+                                    >
+                                        <div className="flex items-center gap-3">
+                                            {/* Expand/Collapse Icon */}
+                                            <div className={`shrink-0 w-5 h-5 flex items-center justify-center rounded transition-transform ${isExpanded ? 'rotate-90' : ''}`}>
+                                                <ChevronRight className="w-4 h-4 text-slate-400" />
                                             </div>
-                                        ) : (
-                                            <div className="inline-block px-2 py-0.5 rounded bg-red-50 text-red-600 font-bold text-xs border border-red-100" title="Required skill missing from assigned staff">
-                                                Missing
+
+                                            {/* Project Info */}
+                                            <div className="flex-1 min-w-0">
+                                                <div className="flex items-center gap-2">
+                                                    <h3 className="font-semibold text-slate-800 text-sm truncate" title={project.name}>
+                                                        {project.name}
+                                                    </h3>
+                                                    {project.team && (
+                                                        <span className="text-[9px] px-1.5 py-0.5 bg-slate-100 text-slate-500 rounded font-medium shrink-0">
+                                                            {project.team}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                <div className="flex items-center gap-2 mt-0.5 text-[10px] text-slate-400">
+                                                    <span>{skillScores.length} skill{skillScores.length !== 1 ? 's' : ''}</span>
+                                                    <span>·</span>
+                                                    <span>{assignedStaff.length} staff</span>
+                                                </div>
                                             </div>
-                                        )}
-                                    </td>
-                                );
-                            })}
-                        </tr>
-                    ))}
-                    {projects.length === 0 && (
-                        <tr>
-                            <td colSpan={config.skills.length + 1} className="p-10 text-center text-slate-400">
-                                Add projects to view skill requirements.
-                            </td>
-                        </tr>
-                    )}
-                </tbody>
-            </table>
+
+                                            {/* Gap count */}
+                                            {gapCount > 0 && (
+                                                <div className="shrink-0 flex items-center gap-1.5 px-2 py-1 bg-red-50 border border-red-200 rounded-lg">
+                                                    <div className="w-2 h-2 bg-red-500 rounded-full"></div>
+                                                    <span className="text-sm font-bold text-red-600">{gapCount}</span>
+                                                    <span className="text-[9px] text-red-500">gap{gapCount !== 1 ? 's' : ''}</span>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </button>
+
+                                    {/* Expandable Skills List */}
+                                    {isExpanded && (
+                                        <div className="border-t border-slate-100">
+                                            <div className="p-3">
+                                                {skillScores.length > 0 ? (
+                                                    <div className="space-y-2">
+                                                        {skillScores.map(({ skill, contributors, isCovered }) => (
+                                                            <div
+                                                                key={skill}
+                                                                className={`flex items-center gap-2 p-2 rounded-lg ${isCovered ? 'bg-slate-50' : 'bg-red-50 border border-red-100'}`}
+                                                            >
+                                                                {/* Skill name */}
+                                                                <div className="flex-1 min-w-0">
+                                                                    <div className="flex items-center gap-2">
+                                                                        <span className="text-xs font-medium text-slate-700 truncate" title={skill}>
+                                                                            {skill}
+                                                                        </span>
+                                                                        {!isCovered && (
+                                                                            <span className="text-[9px] px-1 py-0.5 bg-red-100 text-red-600 rounded font-semibold shrink-0">
+                                                                                GAP
+                                                                            </span>
+                                                                        )}
+                                                                    </div>
+                                                                    {/* Contributors */}
+                                                                    {contributors.length > 0 && (
+                                                                        <div className="flex items-center gap-1 mt-1 flex-wrap">
+                                                                            {contributors.slice(0, 4).map((c, i) => {
+                                                                                const levelColor = c.level === 'Advanced' ? 'bg-emerald-500' : c.level === 'Intermediate' ? 'bg-amber-500' : 'bg-sky-500';
+                                                                                return (
+                                                                                    <div
+                                                                                        key={i}
+                                                                                        className="flex items-center gap-0.5 text-[9px] text-slate-500"
+                                                                                        title={`${c.name}: ${c.level}`}
+                                                                                    >
+                                                                                        <div className={`w-1.5 h-1.5 ${levelColor} rounded-full`}></div>
+                                                                                        <span>{c.initials}</span>
+                                                                                    </div>
+                                                                                );
+                                                                            })}
+                                                                            {contributors.length > 4 && (
+                                                                                <span className="text-[9px] text-slate-400">+{contributors.length - 4}</span>
+                                                                            )}
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+                                                                {/* Coverage indicator */}
+                                                                {isCovered && (
+                                                                    <div className="shrink-0 w-6 h-6 rounded-full bg-emerald-100 flex items-center justify-center">
+                                                                        <div className="w-2 h-2 bg-emerald-500 rounded-full"></div>
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                ) : (
+                                                    <div className="text-center py-4 text-slate-400 text-xs">
+                                                        No required skills defined
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            );
+                        })}
+                    </div>
+                ) : (
+                    <div className="flex-1 flex items-center justify-center">
+                        <div className="text-center">
+                            <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                                <Award className="w-8 h-8 text-slate-300" />
+                            </div>
+                            <div className="text-slate-500 text-sm font-medium">No projects to display</div>
+                            <div className="text-slate-400 text-xs mt-1">Add projects in the sidebar to view skill coverage</div>
+                        </div>
+                    </div>
+                )}
+            </div>
         );
     }
 
@@ -782,19 +1009,53 @@ export const ScheduleTable: React.FC<ScheduleTableProps> = ({
   };
 
   return (
-    <div className="flex flex-col h-full bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-      <div className="p-4 bg-slate-50 border-b border-slate-200 flex flex-col gap-4">
+    <div className="flex flex-col h-full bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden min-h-0">
+      <div className="p-4 bg-slate-50 border-b border-slate-200 flex flex-col gap-4 shrink-0">
          <div className="flex justify-between items-center">
               <h3 className="text-sm font-bold text-slate-700 uppercase tracking-wider flex items-center gap-2">
                 <TrendingUp className="w-4 h-4" /> Performance Metrics
               </h3>
-              <button
-                  onClick={handleExport}
-                  className="flex items-center gap-2 px-3 py-1.5 bg-white border border-slate-300 rounded text-xs font-medium text-slate-700 hover:bg-slate-50 hover:text-indigo-600 transition-colors shadow-sm"
-              >
-                 <Download className="w-3.5 h-3.5" />
-                 Export to Excel
-              </button>
+
+              {/* Filters */}
+              <div className="flex items-center gap-3">
+                {/* Date Range Filter */}
+                <div className="flex items-center bg-white rounded-lg border border-slate-200 shadow-sm">
+                  <div className="flex items-center gap-2 px-3 py-1.5 border-r border-slate-200">
+                    <Calendar className="w-3.5 h-3.5 text-indigo-500" />
+                    <span className="text-xs text-slate-500 font-medium">From:</span>
+                    <input
+                      type="date"
+                      value={fromDate}
+                      onChange={(e) => onFromDateChange(e.target.value)}
+                      className="bg-transparent text-xs text-slate-700 focus:outline-none w-[110px] cursor-pointer"
+                    />
+                  </div>
+                  <div className="flex items-center gap-2 px-3 py-1.5">
+                    <span className="text-xs text-slate-500 font-medium">To:</span>
+                    <input
+                      type="date"
+                      value={toDate}
+                      onChange={(e) => onToDateChange(e.target.value)}
+                      className="bg-transparent text-xs text-slate-700 focus:outline-none w-[110px] cursor-pointer"
+                    />
+                  </div>
+                </div>
+
+                {/* Team Filter */}
+                <div className="relative">
+                  <Filter className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  <select
+                    value={selectedTeam}
+                    onChange={(e) => onTeamChange(e.target.value)}
+                    className="pl-8 pr-8 py-1.5 bg-white border border-slate-200 text-slate-700 text-xs rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 hover:border-slate-300 transition-all cursor-pointer appearance-none shadow-sm min-w-[130px]"
+                  >
+                    <option value="All Teams">All Teams</option>
+                    {teams.map(team => (
+                      <option key={team} value={team}>{team}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
          </div>
 
          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -830,8 +1091,8 @@ export const ScheduleTable: React.FC<ScheduleTableProps> = ({
 
             <div className="bg-white p-3 rounded-lg border border-slate-200 shadow-sm flex items-center justify-between">
                 <div>
-                    <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Skills Score</p>
-                    <p className="text-xl font-bold text-slate-700">{stats.totalSkillScore.toFixed(1)}</p>
+                    <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Skill Coverage</p>
+                    <p className="text-xl font-bold text-slate-700">{Math.round(stats.avgSkillCoverage)}%</p>
                 </div>
                 <div className="p-2 bg-blue-50 rounded-full">
                     <Target className="w-4 h-4 text-blue-600" />
@@ -840,7 +1101,7 @@ export const ScheduleTable: React.FC<ScheduleTableProps> = ({
          </div>
       </div>
 
-      <div className="flex-1 overflow-auto custom-scrollbar relative">
+      <div className="flex-1 min-h-0 overflow-auto custom-scrollbar relative">
         {renderContent()}
       </div>
     </div>

@@ -81,7 +81,7 @@ export const TeamMemberList: React.FC<TeamMemberListProps> = ({
 
   return (
     <>
-      <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 h-full flex flex-col">
+      <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 h-full flex flex-col min-h-0 overflow-hidden">
         <div className="flex justify-between items-center mb-6 shrink-0">
           <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2">
             <Users className="w-5 h-5 text-indigo-600" />
@@ -96,7 +96,7 @@ export const TeamMemberList: React.FC<TeamMemberListProps> = ({
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto custom-scrollbar space-y-3 pr-2 min-h-0">
+        <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar space-y-3 pr-2">
           {realStaff.map((staff) => (
                <div
                   key={staff.id}
